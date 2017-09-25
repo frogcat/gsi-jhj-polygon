@@ -28,7 +28,7 @@
     var map = L.map("map", L.extend({
       zoom: 19,
       maxZoom: 20,
-      center: [35.64430,139.67124]
+      center: [35.64430, 139.67124]
     }, L.Hash.parseHash(location.hash)));
     map.zoomControl.setPosition("bottomright");
 
@@ -48,7 +48,9 @@
       if (!this.layers) this.layers = [];
     }).on("tileload", function(event) {
       var url = L.Util.template("https://cyberjapandata.gsi.go.jp/xyz/experimental_jhj/{z}/{x}/{y}.geojson", event.coords);
-      this.promises.push(fetch(url).then(a => a.ok ? a.json() : {features:[]}).then(json => {
+      this.promises.push(fetch(url).then(a => a.ok ? a.json() : {
+        features: []
+      }).then(json => {
         event.tile.json = json;
       }));
     }).on("load", function(event) {
@@ -58,13 +60,15 @@
           map.removeLayer(that.layers.pop());
         var data = {};
         Object.values(that._tiles).forEach(b => {
-          b.el.json.features.forEach(f => {
-            var key = f.properties["市区町村コード"] + ":" +
-              f.properties["町又は字の名称"] + "-" +
-              f.properties["街区符号"];
-            if (!data[key]) data[key] = [f];
-            else data[key].push(f);
-          });
+          try {
+            b.el.json.features.forEach(f => {
+              var key = f.properties["市区町村コード"] + ":" +
+                f.properties["町又は字の名称"] + "-" +
+                f.properties["街区符号"];
+              if (!data[key]) data[key] = [f];
+              else data[key].push(f);
+            });
+          } catch (e) {}
         });
         Object.keys(data).forEach(key => {
           data[key].sort(function(s, t) {
