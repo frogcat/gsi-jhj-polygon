@@ -48,7 +48,7 @@
       if (!this.layers) this.layers = [];
     }).on("tileload", function(event) {
       var url = L.Util.template("https://cyberjapandata.gsi.go.jp/xyz/experimental_jhj/{z}/{x}/{y}.geojson", event.coords);
-      this.promises.push(fetch(url).then(a => a.ok ? a.json() : null).then(json => {
+      this.promises.push(fetch(url).then(a => a.ok ? a.json() : {features:[]}).then(json => {
         event.tile.json = json;
       }));
     }).on("load", function(event) {
