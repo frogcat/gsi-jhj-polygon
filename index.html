@@ -5,19 +5,27 @@
   <meta charset="UTF-8">
   <title>住居表示住所</title>
   <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.2.0/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.2.0/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.5.1/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.5.1/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-hash@0.2.1/leaflet-hash.js"></script>
+  <script src="https://frogcat.github.io/polylabel/polylabel.bundle.js"></script>
   <style>
     .my-div-icon {
+      width: auto !important;
+      height: auto !important;
+      margin-top: 0 !important;
+      margin-left: 0 !important;
+    }
+
+    .my-div-icon>div {
       font-size: 9pt;
       white-space: nowrap;
       font-weight: bold;
       color: black;
       background: orange;
       border: 1px solid black;
-      width: auto !important;
-      height: auto !important;
+      margin: auto;
+      transform: translate(-50%, -50%);
     }
   </style>
 </head>
@@ -28,6 +36,7 @@
     var map = L.map("map", L.extend({
       zoom: 19,
       maxZoom: 20,
+      minZoom: 17,
       center: [35.64430, 139.67124]
     }, L.Hash.parseHash(location.hash)));
     map.zoomControl.setPosition("bottomright");
@@ -40,54 +49,63 @@
       maxZoom: 20
     }).addTo(map);
 
-    L.tileLayer(L.Util.emptyImageUrl, {
+    var group = L.featureGroup().addTo(map);
+
+    Object.assign(L.gridLayer({
       maxNativeZoom: 18,
       minNativeZoom: 18
-    }).on("loading", function(event) {
-      this.promises = [];
-      if (!this.layers) this.layers = [];
-    }).on("tileload", function(event) {
-      var url = L.Util.template("https://cyberjapandata.gsi.go.jp/xyz/experimental_jhj/{z}/{x}/{y}.geojson", event.coords);
-      this.promises.push(fetch(url).then(a => a.ok ? a.json() : {
-        features: []
-      }).then(json => {
-        event.tile.json = json;
-      }));
-    }).on("load", function(event) {
-      var that = this;
-      Promise.all(this.promises).then(a => {
-        while (that.layers.length > 0)
-          map.removeLayer(that.layers.pop());
-        var data = {};
-        Object.values(that._tiles).forEach(b => {
-          try {
-            b.el.json.features.forEach(f => {
-              var key = f.properties["市区町村コード"] + ":" +
-                f.properties["町又は字の名称"] + "-" +
-                f.properties["街区符号"];
-              if (!data[key]) data[key] = [f];
-              else data[key].push(f);
-            });
-          } catch (e) {}
+    }), {
+      createTile: function(coords, done) {
+        var div = document.createElement("div");
+        var url = L.Util.template("https://cyberjapandata.gsi.go.jp/xyz/experimental_jhj/{z}/{x}/{y}.geojson", coords);
+        fetch(url).then(a => a.ok ? a.json() : {
+          type: "FeatureCollection",
+          features: []
+        }).then(json => {
+          div.json = json;
+          done(null, div);
         });
-        Object.keys(data).forEach(key => {
-          data[key].sort(function(s, t) {
-            return parseInt(s.properties["基礎番号"]) - parseInt(t.properties["基礎番号"]);
-          });
-          var points = data[key].map(f => {
-            return [f.geometry.coordinates[1], f.geometry.coordinates[0]];
-          });
-          var polygon = L.polygon(points).addTo(map);
-          that.layers.push(polygon);
-          var caption = L.marker(polygon.getBounds().getCenter(), {
-            icon: L.divIcon({
-              className: 'my-div-icon',
-              html: key
-            })
-          }).addTo(map);
-          that.layers.push(caption);
+        return div;
+      },
+      features: function() {
+        var a = [];
+        Object.values(this._tiles).forEach(b => {
+          a = a.concat(b.el.json.features);
         });
+        return a;
+      }
+    }).on("load", function() {
+      group.clearLayers();
+      var data = {};
+      this.features().forEach(f => {
+        var key = f.properties["市区町村コード"] + ":" +
+          f.properties["町又は字の名称"].replace("-", "") + "-" +
+          f.properties["街区符号"];
+        if (!data[key]) data[key] = [f];
+        else data[key].push(f);
       });
+      Object.keys(data).forEach(key => {
+        data[key].sort(function(s, t) {
+          return parseInt(s.properties["基礎番号"]) - parseInt(t.properties["基礎番号"]);
+        });
+        var points = data[key].map(f => {
+          return [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+        });
+
+        L.polygon(points, {
+          color: 'navy'
+        }).addTo(group);
+
+        L.marker(polylabel([points], 1.0), {
+          icon: L.divIcon({
+            className: 'my-div-icon',
+            html: '<div>' + key.split(":").pop() + '</div>'
+          })
+        }).bindPopup(`<dl><dt>市区町村コード</dt><dd>${key.replace(/:.*$/, "")}</dd>` +
+          `<dt>ラベル</dt><dd>${key.replace(/^.*:/, "")}</dd>` +
+          `<dt>基礎番号件数</dt><dd>${points.length}</dd></dl>`).addTo(group);
+      });
+
     }).addTo(map);
   </script>
 </body>
